@@ -1,13 +1,13 @@
-﻿ pipeline {
+﻿pipeline {
     agent any
 
     environment {
-        PROJECT_PATH = "PipeLiineJenkinExample\\PipeLiineJenkinExample.csproj"
+        PROJECT_PATH  = "PipeLiineJenkinExample\\PipeLiineJenkinExample.csproj"
         PUBLISH_FOLDER = "publish"
 
         TARGET_SERVER = "184.169.246.116"
 
-        IIS_APP_POOL = "MyMvcAppPool"
+        IIS_APP_POOL  = "MyMvcAppPool"
         IIS_SITE_NAME = "MyMvcApp"
 
         DEPLOY_PATH = "C:\\inetpub\\wwwroot\\MyMvcApp"
@@ -79,161 +79,170 @@
 
                     powershell '''
 
-                    $ErrorActionPreference = "Stop"
+                        $ErrorActionPreference = "Stop"
 
-                    $server = $env:TARGET_SERVER
-                    $username = $env:WIN_USER
+                        $server   = $env:TARGET_SERVER
+                        $username = $env:WIN_USER
 
-                    Write-Host "========================================"
-                    Write-Host "Connecting to Windows EC2: $server"
-                    Write-Host "========================================"
+                        Write-Host "========================================"
+                        Write-Host "Connecting to Windows EC2: $server"
+                        Write-Host "========================================"
 
-                    $password = ConvertTo-SecureString `
-                        $env:WIN_PASSWORD `
-                        -AsPlainText `
-                        -Force
+                        $password = ConvertTo-SecureString `
+                            $env:WIN_PASSWORD `
+                            -AsPlainText `
+                            -Force
 
-                    $credential = New-Object `
-                        System.Management.Automation.PSCredential(
-                            $username,
-                            $password
-                        )
+                        $credential = New-Object `
+                            System.Management.Automation.PSCredential(
+                                $username,
+                                $password
+                            )
 
-                    $session = $null
+                        $session = $null
 
-                    try {
+                        try {
 
-                        # Create PowerShell Remoting Session
-                        $session = New-PSSession `
-                            -ComputerName $server `
-                            -Credential $credential
+                            # Create PowerShell Remoting Session
+                            $session = New-PSSession `
+                                -ComputerName $server `
+                                -Credential $credential
 
-                        Write-Host "Connected successfully."
+                            Write-Host "Connected successfully."
 
-                        # Stop IIS Application Pool
-                        Write-Host "Stopping IIS Application Pool..."
 
-                        Invoke-Command `
-                            -Session $session `
-                            -ScriptBlock {
+                            # Stop IIS Application Pool
+                            Write-Host "Stopping IIS Application Pool..."
 
-                                Import-Module WebAdministration
+                            Invoke-Command `
+                                -Session $session `
+                                -ScriptBlock {
 
-                                $appPool = "MyMvcAppPool"
+                                    Import-Module WebAdministration
 
-                                if (Test-Path "IIS:\\AppPools\\$appPool") {
+                                    $appPool = "MyMvcAppPool"
 
-                                    $state = (Get-WebAppPoolState `
-                                        -Name $appPool).Value
+                                    if (Test-Path "IIS:\\AppPools\\$appPool") {
 
-                                    if ($state -eq "Started") {
+                                        $state = (
+                                            Get-WebAppPoolState `
+                                                -Name $appPool
+                                        ).Value
 
-                                        Stop-WebAppPool `
-                                            -Name $appPool
+                                        if ($state -eq "Started") {
 
-                                        Write-Host "Application Pool stopped."
+                                            Stop-WebAppPool `
+                                                -Name $appPool
+
+                                            Write-Host "Application Pool stopped."
+
+                                        }
+                                        else {
+
+                                            Write-Host "Application Pool already stopped."
+
+                                        }
 
                                     }
                                     else {
 
-                                        Write-Host "Application Pool already stopped."
+                                        throw "IIS Application Pool '$appPool' does not exist."
 
                                     }
-
                                 }
-                                else {
 
-                                    throw "IIS Application Pool '$appPool' does not exist."
 
+                            # Create Deployment Directory
+                            Write-Host "Preparing deployment directory..."
+
+                            Invoke-Command `
+                                -Session $session `
+                                -ScriptBlock {
+
+                                    $deployPath = "C:\\inetpub\\wwwroot\\MyMvcApp"
+
+                                    if (-not (Test-Path $deployPath)) {
+
+                                        New-Item `
+                                            -ItemType Directory `
+                                            -Path $deployPath `
+                                            -Force |
+                                            Out-Null
+
+                                        Write-Host "Deployment directory created."
+
+                                    }
                                 }
-                            }
 
-                        # Create Deployment Directory
-                        Write-Host "Preparing deployment directory..."
 
-                        Invoke-Command `
-                            -Session $session `
-                            -ScriptBlock {
+                            # Remove Old Application Files
+                            Write-Host "Removing old application files..."
 
-                                $deployPath = "C:\\inetpub\\wwwroot\\MyMvcApp"
+                            Invoke-Command `
+                                -Session $session `
+                                -ScriptBlock {
 
-                                if (-not (Test-Path $deployPath)) {
+                                    $deployPath = "C:\\inetpub\\wwwroot\\MyMvcApp"
 
-                                    New-Item `
-                                        -ItemType Directory `
+                                    Get-ChildItem `
                                         -Path $deployPath `
-                                        -Force | Out-Null
+                                        -Force |
+                                        Remove-Item `
+                                            -Recurse `
+                                            -Force
 
-                                    Write-Host "Deployment directory created."
+                                    Write-Host "Old application files removed."
 
                                 }
-                            }
 
-                        # Remove Old Application Files
-                        Write-Host "Removing old application files..."
 
-                        Invoke-Command `
-                            -Session $session `
-                            -ScriptBlock {
+                            # Copy Published Application
+                            Write-Host "Copying published application..."
 
-                                $deployPath = "C:\\inetpub\\wwwroot\\MyMvcApp"
+                            Copy-Item `
+                                -Path "$env:WORKSPACE\\publish\\*" `
+                                -Destination "C:\\inetpub\\wwwroot\\MyMvcApp" `
+                                -ToSession $session `
+                                -Recurse `
+                                -Force
 
-                                Get-ChildItem `
-                                    -Path $deployPath `
-                                    -Force |
-                                Remove-Item `
-                                    -Recurse `
-                                    -Force
+                            Write-Host "Application files copied successfully."
 
-                                Write-Host "Old application files removed."
 
-                            }
+                            # Start IIS Application Pool
+                            Write-Host "Starting IIS Application Pool..."
 
-                        # Copy Published Application
-                        Write-Host "Copying published application..."
+                            Invoke-Command `
+                                -Session $session `
+                                -ScriptBlock {
 
-                        Copy-Item `
-                            -Path "$env:WORKSPACE\\publish\\*" `
-                            -Destination "C:\\inetpub\\wwwroot\\MyMvcApp" `
-                            -ToSession $session `
-                            -Recurse `
-                            -Force
+                                    Import-Module WebAdministration
 
-                        Write-Host "Application files copied successfully."
+                                    $appPool = "MyMvcAppPool"
 
-                        # Start IIS Application Pool
-                        Write-Host "Starting IIS Application Pool..."
+                                    Start-WebAppPool `
+                                        -Name $appPool
 
-                        Invoke-Command `
-                            -Session $session `
-                            -ScriptBlock {
+                                    Write-Host "Application Pool started successfully."
 
-                                Import-Module WebAdministration
+                                }
 
-                                $appPool = "MyMvcAppPool"
 
-                                Start-WebAppPool `
-                                    -Name $appPool
+                            Write-Host "========================================"
+                            Write-Host "Deployment completed successfully!"
+                            Write-Host "========================================"
 
-                                Write-Host "Application Pool started successfully."
-
-                            }
-
-                        Write-Host "========================================"
-                        Write-Host "Deployment completed successfully!"
-                        Write-Host "========================================"
-
-                    }
-                    finally {
-
-                        if ($null -ne $session) {
-
-                            Write-Host "Closing PowerShell session..."
-
-                            Remove-PSSession `
-                                -Session $session
                         }
-                    }
+                        finally {
+
+                            if ($null -ne $session) {
+
+                                Write-Host "Closing PowerShell session..."
+
+                                Remove-PSSession `
+                                    -Session $session
+                            }
+                        }
                     '''
                 }
             }
