@@ -3,7 +3,7 @@
             label 'built-in'
         }
         
-stages {
+ stages {
             stage('Test') {
                 steps {
                     echo 'Jenkins Declarative Pipeline is working'
