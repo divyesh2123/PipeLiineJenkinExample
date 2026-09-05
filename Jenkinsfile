@@ -1,20 +1,15 @@
-﻿```groovy
-pipeline {
+﻿pipeline {
     agent any
 
     environment {
-        // .NET Project
         PROJECT_PATH = "PipeLiineJenkinExample\\PipeLiineJenkinExample.csproj"
         PUBLISH_FOLDER = "publish"
 
-        // Target Windows EC2
         TARGET_SERVER = "184.169.246.116"
 
-        // IIS Configuration
         IIS_APP_POOL = "MyMvcAppPool"
         IIS_SITE_NAME = "MyMvcApp"
 
-        // Deployment Folder
         DEPLOY_PATH = "C:\\inetpub\\wwwroot\\MyMvcApp"
     }
 
@@ -46,9 +41,7 @@ pipeline {
         stage('Build') {
             steps {
                 bat '''
-                    dotnet build "%PROJECT_PATH%" ^
-                        --configuration Release ^
-                        --no-restore
+                    dotnet build "%PROJECT_PATH%" --configuration Release --no-restore
                 '''
             }
         }
@@ -56,9 +49,7 @@ pipeline {
         stage('Test') {
             steps {
                 bat '''
-                    dotnet test "%PROJECT_PATH%" ^
-                        --configuration Release ^
-                        --no-build
+                    dotnet test "%PROJECT_PATH%" --configuration Release --no-build
                 '''
             }
         }
@@ -66,9 +57,7 @@ pipeline {
         stage('Publish') {
             steps {
                 bat '''
-                    if exist "%PUBLISH_FOLDER%" (
-                        rmdir /s /q "%PUBLISH_FOLDER%"
-                    )
+                    if exist "%PUBLISH_FOLDER%" rmdir /s /q "%PUBLISH_FOLDER%"
 
                     dotnet publish "%PROJECT_PATH%" ^
                         --configuration Release ^
@@ -95,17 +84,15 @@ pipeline {
                     $server = $env:TARGET_SERVER
                     $username = $env:WIN_USER
 
-                    Write-Host "======================================"
+                    Write-Host "========================================"
                     Write-Host "Connecting to Windows EC2: $server"
-                    Write-Host "======================================"
+                    Write-Host "========================================"
 
-                    # Convert Jenkins password to SecureString
                     $password = ConvertTo-SecureString `
                         $env:WIN_PASSWORD `
                         -AsPlainText `
                         -Force
 
-                    # Create Credential
                     $credential = New-Object `
                         System.Management.Automation.PSCredential(
                             $username,
@@ -116,20 +103,14 @@ pipeline {
 
                     try {
 
-                        # -----------------------------------------
                         # Create PowerShell Remoting Session
-                        # -----------------------------------------
-
                         $session = New-PSSession `
                             -ComputerName $server `
                             -Credential $credential
 
                         Write-Host "Connected successfully."
 
-                        # -----------------------------------------
                         # Stop IIS Application Pool
-                        # -----------------------------------------
-
                         Write-Host "Stopping IIS Application Pool..."
 
                         Invoke-Command `
@@ -155,7 +136,7 @@ pipeline {
                                     }
                                     else {
 
-                                        Write-Host "Application Pool is already stopped."
+                                        Write-Host "Application Pool already stopped."
 
                                     }
 
@@ -167,10 +148,7 @@ pipeline {
                                 }
                             }
 
-                        # -----------------------------------------
                         # Create Deployment Directory
-                        # -----------------------------------------
-
                         Write-Host "Preparing deployment directory..."
 
                         Invoke-Command `
@@ -189,13 +167,9 @@ pipeline {
                                     Write-Host "Deployment directory created."
 
                                 }
-
                             }
 
-                        # -----------------------------------------
                         # Remove Old Application Files
-                        # -----------------------------------------
-
                         Write-Host "Removing old application files..."
 
                         Invoke-Command `
@@ -211,14 +185,11 @@ pipeline {
                                     -Recurse `
                                     -Force
 
-                                Write-Host "Old files removed."
+                                Write-Host "Old application files removed."
 
                             }
 
-                        # -----------------------------------------
                         # Copy Published Application
-                        # -----------------------------------------
-
                         Write-Host "Copying published application..."
 
                         Copy-Item `
@@ -230,10 +201,7 @@ pipeline {
 
                         Write-Host "Application files copied successfully."
 
-                        # -----------------------------------------
                         # Start IIS Application Pool
-                        # -----------------------------------------
-
                         Write-Host "Starting IIS Application Pool..."
 
                         Invoke-Command `
@@ -251,16 +219,12 @@ pipeline {
 
                             }
 
-                        Write-Host "======================================"
+                        Write-Host "========================================"
                         Write-Host "Deployment completed successfully!"
-                        Write-Host "======================================"
+                        Write-Host "========================================"
 
                     }
                     finally {
-
-                        # -----------------------------------------
-                        # Close PowerShell Remoting Session
-                        # -----------------------------------------
 
                         if ($null -ne $session) {
 
@@ -268,9 +232,7 @@ pipeline {
 
                             Remove-PSSession `
                                 -Session $session
-
                         }
-
                     }
                     '''
                 }
@@ -281,15 +243,11 @@ pipeline {
     post {
 
         success {
-            echo '======================================'
             echo 'Deployment Successful!'
-            echo '======================================'
         }
 
         failure {
-            echo '======================================'
             echo 'Deployment Failed!'
-            echo '======================================'
         }
 
         always {
@@ -297,4 +255,3 @@ pipeline {
         }
     }
 }
-```
